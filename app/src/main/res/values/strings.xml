@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Attendance Tracker</string>
+    <string name="settings_title">设置</string>
+    <string name="records_title">打卡记录</string>
+    <string name="settings_title_full">设置公司位置</string>
+</resources>
