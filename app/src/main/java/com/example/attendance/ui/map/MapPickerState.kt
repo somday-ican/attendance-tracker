@@ -14,4 +14,6 @@ class MapPickerState {
     var isResolvingAddress by mutableStateOf(false)
     var addressResolveFailed by mutableStateOf(false)
     var moveToTrigger by mutableStateOf(0)
+    var locationErrorMessage by mutableStateOf("")
+    var isLocating by mutableStateOf(false)
 }

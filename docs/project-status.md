@@ -3,23 +3,21 @@
 ## 项目信息
 - **项目名称**: Attendance Tracker
 - **创建日期**: 2026-05-03
-- **当前阶段**: 第11步已完成（文档整理）- 全部步骤完成
+- **当前阶段**: 第12步已完成（考勤规则重构）- 全部步骤完成
 - **构建状态**: BUILD SUCCESSFUL
 - **最后构建**: 2026-05-03
 
 ## 1. 当前项目阶段
-第10步已完成并已验证：
+第12步已完成并已验证：
 
-✅ **NotificationHelper 已创建**：管理通知 channel + 构建非工作日确认通知
-✅ **AttendanceActionReceiver 已创建**：处理通知"确认记录" action，更新 PENDING → CONFIRMED
-✅ **非工作日 ENTER 流程完整**：PENDING 记录 + 弹出通知 → 用户确认 → CONFIRMED
-✅ **通知内容正确**：标题"非工作日到达公司"，内容"是否确认记录本次到公司？"，按钮"确认记录"
-✅ **不点击通知**：记录保持 PENDING，RecordsScreen 可见，HomeScreen 显示"等待确认"
-✅ **Android 13+ 权限兼容**：`POST_NOTIFICATIONS` 已在 Manifest 声明
-✅ **PendingIntent 兼容 Android 12+**：使用 `FLAG_IMMUTABLE`
-✅ **HomeScreen 新增状态显示**：`非工作日到达，等待确认`
-✅ **所有现有功能保留**：地图选点、POI搜索、逆地理编码、Geofence、模拟按钮均未破坏
-✅ **MVP 核心功能已完成**：10步功能全部实现并验证通过
+✅ **考勤规则重构完成**：每天只保留一条 AttendanceRecord 作为汇总
+✅ **首次 ENTER 记录 arriveTime**：后续 ENTER 不覆盖 arriveTime
+✅ **每次 EXIT 更新 leaveTime**：始终为当天最后一次离开时间
+✅ **LocationEvent 保留全部原始事件**：用于状态判断和调试
+✅ **首页状态判断优化**：根据最新 LocationEvent 类型判断"已到公司"/"已离开公司"
+✅ **PENDING 优先显示**：非工作日等待确认时优先展示
+✅ **总上班时长展示**：HomeScreen + RecordsScreen 显示时长（xx分钟 / x小时xx分钟）
+✅ **统一 Repository 业务逻辑**：BroadcastReceiver 和模拟按钮使用同一套方法
 ✅ **构建验证通过**：`.\gradlew.bat assembleDebug` 执行成功，BUILD SUCCESSFUL
 
 ## 2. 当前已实现内容
@@ -353,5 +351,5 @@ D:\Projects\attendance-tracker\
 | 构建执行 | ✅ 通过 | `.\gradlew.bat assembleDebug` 构建成功 |
 | 编译运行 | ✅ 通过 | BUILD SUCCESSFUL，可在Android环境运行 |
 
-**最后更新**: 2026-05-03 (第10步完成，全部10步MVP功能实现)
+**最后更新**: 2026-05-04 (第12步完成，考勤规则重构)
 **文档创建者**: opencode AI

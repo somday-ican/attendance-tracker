@@ -4,6 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.example.attendance.data.local.AppDatabase
+import com.example.attendance.data.repository.AttendanceRepository
+import com.example.attendance.data.settings.SettingsDataStore
+import com.example.attendance.domain.WorkdayChecker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -19,11 +22,11 @@ class AttendanceActionReceiver : BroadcastReceiver() {
         val today = dateFormat.format(Date())
 
         CoroutineScope(Dispatchers.IO).launch {
-            val dao = AppDatabase.getInstance(context.applicationContext).attendanceDao()
-            val record = dao.getRecordByDate(today)
-            if (record != null && record.status == "PENDING") {
-                dao.updateRecord(record.copy(status = "CONFIRMED"))
-            }
+            val appContext = context.applicationContext
+            val database = AppDatabase.getInstance(appContext)
+            val dataStore = SettingsDataStore(appContext)
+            val repository = AttendanceRepository(database.attendanceDao(), dataStore, WorkdayChecker())
+            repository.confirmPendingRecord(today)
         }
     }
 

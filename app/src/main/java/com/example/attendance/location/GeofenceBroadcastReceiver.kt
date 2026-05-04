@@ -4,9 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.example.attendance.data.local.AppDatabase
-import com.example.attendance.data.local.entities.AttendanceRecord
-import com.example.attendance.data.local.entities.LocationEvent
-import com.example.attendance.domain.AttendanceRules
+import com.example.attendance.data.repository.AttendanceRepository
+import com.example.attendance.data.settings.SettingsDataStore
 import com.example.attendance.domain.WorkdayChecker
 import com.example.attendance.notification.NotificationHelper
 import com.google.android.gms.location.Geofence
@@ -14,9 +13,6 @@ import com.google.android.gms.location.GeofencingEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class GeofenceBroadcastReceiver : BroadcastReceiver() {
 
@@ -25,58 +21,28 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
         if (geofencingEvent == null || geofencingEvent.hasError()) return
 
         val transitionType = geofencingEvent.geofenceTransition
-        val now = System.currentTimeMillis()
-        val today = dateFormat.format(Date(now))
 
         CoroutineScope(Dispatchers.IO).launch {
-            val dao = AppDatabase.getInstance(context.applicationContext).attendanceDao()
-            val workdayChecker = WorkdayChecker()
-            val isWorkday = workdayChecker.isWorkday(now)
-            val status = AttendanceRules.determineStatus(isWorkday)
+            val appContext = context.applicationContext
+            val database = AppDatabase.getInstance(appContext)
+            val dataStore = SettingsDataStore(appContext)
+            val repository = AttendanceRepository(database.attendanceDao(), dataStore, WorkdayChecker())
 
             when (transitionType) {
                 Geofence.GEOFENCE_TRANSITION_ENTER -> {
-                    dao.insertEvent(
-                        LocationEvent(type = "ENTER", timestamp = now, handled = true)
-                    )
-                    val existing = dao.getRecordByDate(today)
-                    if (existing != null) {
-                        dao.updateRecord(
-                            existing.copy(arriveTime = now, status = status, isWorkday = isWorkday)
-                        )
-                    } else {
-                        dao.insertRecord(
-                            AttendanceRecord(
-                                date = today,
-                                arriveTime = now,
-                                source = "AUTO",
-                                status = status,
-                                isWorkday = isWorkday
-                            )
-                        )
-                    }
-
-                    if (!isWorkday) {
-                        val notificationHelper = NotificationHelper(context.applicationContext)
+                    repository.handleEnter("AUTO")
+                    val today = repository.getTodayRecord(java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date()))
+                    if (today != null && today.status == "PENDING") {
+                        val notificationHelper = NotificationHelper(appContext)
                         notificationHelper.createChannel()
                         notificationHelper.showNonWorkdayConfirmation()
                     }
                 }
 
                 Geofence.GEOFENCE_TRANSITION_EXIT -> {
-                    dao.insertEvent(
-                        LocationEvent(type = "EXIT", timestamp = now, handled = true)
-                    )
-                    val existing = dao.getRecordByDate(today)
-                    if (existing != null) {
-                        dao.updateRecord(existing.copy(leaveTime = now))
-                    }
+                    repository.handleExit()
                 }
             }
         }
-    }
-
-    companion object {
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     }
 }

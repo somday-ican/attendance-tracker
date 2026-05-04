@@ -28,4 +28,7 @@ interface AttendanceDao {
 
     @Query("SELECT * FROM location_events ORDER BY timestamp DESC")
     fun getAllEvents(): Flow<List<LocationEvent>>
+
+    @Query("SELECT * FROM location_events WHERE timestamp BETWEEN :startOfDay AND :endOfDay ORDER BY timestamp DESC LIMIT 1")
+    suspend fun getLatestEventOnDate(startOfDay: Long, endOfDay: Long): LocationEvent?
 }

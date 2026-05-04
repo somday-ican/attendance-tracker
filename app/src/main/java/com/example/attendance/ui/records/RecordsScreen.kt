@@ -95,6 +95,19 @@ fun RecordsScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (record.status == "CONFIRMED") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                             )
+                            if (record.arriveTime != null && record.leaveTime != null) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "时长: ${com.example.attendance.util.DateTimeUtils.formatDuration(record.arriveTime, record.leaveTime)}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            } else if (record.arriveTime != null) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "时长: 进行中",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
                             if (record.address != null) {
                                 Text(
                                     text = "地址: ${record.address}",

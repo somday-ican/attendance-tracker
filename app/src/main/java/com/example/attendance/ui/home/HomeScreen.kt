@@ -34,6 +34,7 @@ fun HomeScreen(
     val todayState by viewModel.todayState.collectAsState()
     val todayRecord by viewModel.todayRecord.collectAsState()
     val isWorkday by viewModel.isWorkday.collectAsState()
+    val todayDuration by viewModel.todayDuration.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.refreshToday()
@@ -105,6 +106,13 @@ fun HomeScreen(
                         Text(
                             text = "下班: ${formatTimestamp(it)}",
                             style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    if (todayDuration.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "今日时长: $todayDuration",
+                            style = MaterialTheme.typography.bodySmall
                         )
                     }
                 }

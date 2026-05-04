@@ -32,8 +32,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.example.attendance.location.AMapLocationClientWrapper
-import com.example.attendance.location.PoiSearchManager
 import com.example.attendance.location.ReverseGeocoder
 import com.example.attendance.ui.map.AMapView
 import com.example.attendance.ui.map.MapPickerState
@@ -48,7 +46,6 @@ fun CompanyLocationPickerScreen(
 ) {
     val context = LocalContext.current
     val state = remember { MapPickerState() }
-    val searchManager = remember { PoiSearchManager(context) }
     var requestPermissions by remember { mutableStateOf(!PermissionUtils.hasLocationPermissions(context)) }
     val geocoder = remember { ReverseGeocoder(context) }
 
@@ -57,7 +54,9 @@ fun CompanyLocationPickerScreen(
     ) { granted ->
         val allGranted = granted.values.all { it }
         if (allGranted) {
-            startLocation(context, state)
+            state.isLocating = true
+            state.locationErrorMessage = ""
+            startLocation(context, state, geocoder)
         }
     }
 
@@ -65,7 +64,9 @@ fun CompanyLocationPickerScreen(
         if (requestPermissions && !PermissionUtils.hasLocationPermissions(context)) {
             permissionLauncher.launch(PermissionUtils.LOCATION_PERMISSIONS)
         } else if (PermissionUtils.hasLocationPermissions(context)) {
-            startLocation(context, state)
+            state.isLocating = true
+            state.locationErrorMessage = ""
+            startLocation(context, state, geocoder)
         }
         requestPermissions = false
     }
@@ -81,7 +82,7 @@ fun CompanyLocationPickerScreen(
         )
 
         PoiSearchBox(
-            searchManager = searchManager,
+            searchManager = remember { com.example.attendance.location.PoiSearchManager(context) },
             onPoiSelected = { poi ->
                 state.selectedLatitude = poi.latitude
                 state.selectedLongitude = poi.longitude
@@ -128,6 +129,24 @@ fun CompanyLocationPickerScreen(
                     .fillMaxWidth()
                     .padding(16.dp)
             ) {
+                if (state.locationErrorMessage.isNotBlank()) {
+                    Text(
+                        text = state.locationErrorMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                if (state.isLocating) {
+                    Text(
+                        text = "正在定位...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -176,15 +195,30 @@ fun CompanyLocationPickerScreen(
     }
 }
 
-private fun startLocation(context: android.content.Context, state: MapPickerState) {
-    val locationWrapper = AMapLocationClientWrapper(context)
-    locationWrapper.startOnceLocation(
+private fun startLocation(context: android.content.Context, state: MapPickerState, geocoder: ReverseGeocoder) {
+    val wrapper = com.example.attendance.location.AMapLocationClientWrapper(context)
+    wrapper.startOnceLocation(
         onSuccess = { location ->
+            state.isLocating = false
             state.selectedLatitude = location.latitude
             state.selectedLongitude = location.longitude
             state.hasMarker = true
+            state.moveToTrigger += 1
             state.selectedAddress = "已定位到当前位置"
+            geocoder.resolve(
+                latitude = location.latitude,
+                longitude = location.longitude,
+                onResult = { address ->
+                    state.selectedAddress = address
+                },
+                onError = {
+                    state.selectedAddress = "已定位到当前位置"
+                }
+            )
         },
-        onFail = { }
+        onFail = { code, info ->
+            state.isLocating = false
+            state.locationErrorMessage = "定位失败，错误码：$code，错误信息：$info"
+        }
     )
 }

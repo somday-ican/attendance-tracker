@@ -32,6 +32,9 @@ class HomeViewModel(private val repository: AttendanceRepository) : ViewModel() 
     private val _isWorkday = MutableStateFlow(true)
     val isWorkday: StateFlow<Boolean> = _isWorkday
 
+    private val _todayDuration = MutableStateFlow("")
+    val todayDuration: StateFlow<String> = _todayDuration
+
     init {
         refreshToday()
     }
@@ -40,13 +43,28 @@ class HomeViewModel(private val repository: AttendanceRepository) : ViewModel() 
         viewModelScope.launch {
             val today = DateTimeUtils.getTodayDate()
             val record = repository.getTodayRecord(today)
+            val latestEvent = repository.getTodayLatestEvent()
             _todayRecord.value = record
             _isWorkday.value = WorkdayChecker().isWorkday(today)
-            _todayState.value = when {
-                record == null || record.arriveTime == null -> "未到公司"
-                record.status == "PENDING" -> "非工作日到达，等待确认"
-                record.leaveTime == null -> "已到公司"
-                else -> "已离开公司"
+
+            when {
+                record == null || record.arriveTime == null -> {
+                    _todayState.value = "未到公司"
+                    _todayDuration.value = ""
+                }
+                record.status == "PENDING" -> {
+                    _todayState.value = "非工作日到达，等待确认"
+                    _todayDuration.value = "进行中"
+                }
+                record.leaveTime != null -> {
+                    val isCurrentlyIn = latestEvent?.type == "ENTER"
+                    _todayState.value = if (isCurrentlyIn) "已到公司" else "已离开公司"
+                    _todayDuration.value = if (isCurrentlyIn) "进行中" else DateTimeUtils.formatDuration(record.arriveTime, record.leaveTime)
+                }
+                else -> {
+                    _todayState.value = "已到公司"
+                    _todayDuration.value = "进行中"
+                }
             }
         }
     }
@@ -67,16 +85,14 @@ class HomeViewModel(private val repository: AttendanceRepository) : ViewModel() 
 
     fun simulateArrive() {
         viewModelScope.launch {
-            val today = DateTimeUtils.getTodayDate()
-            repository.simulateArrive(today)
+            repository.simulateArrive(DateTimeUtils.getTodayDate())
             refreshToday()
         }
     }
 
     fun simulateLeave() {
         viewModelScope.launch {
-            val today = DateTimeUtils.getTodayDate()
-            repository.simulateLeave(today)
+            repository.simulateLeave(DateTimeUtils.getTodayDate())
             refreshToday()
         }
     }

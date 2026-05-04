@@ -9,8 +9,33 @@
 - **Geofence 自动打卡**：进入/离开公司围栏时自动记录
 - **工作日判断**：周一到周五为工作日，周六周日为非工作日
 - **非工作日通知确认**：非工作日到达时弹出通知，用户确认后记录
-- **打卡记录查看**：历史打卡记录列表
+- **打卡记录查看**：历史打卡记录列表，包含总上班时长
 - **模拟测试按钮**：HomeScreen 提供模拟进入/离开按钮，方便测试
+
+## 每日考勤汇总规则
+
+每天只保留一条 `AttendanceRecord`，表示当天的考勤汇总。
+
+| 事件 | 行为 |
+|------|------|
+| 当天第一次 ENTER | 创建记录，设置 arriveTime |
+| 当天后续 ENTER | **不覆盖** arriveTime，仅插入 `LocationEvent` |
+| 当天 EXIT | 更新 leaveTime = 当前时间 |
+| 当天后续 EXIT | **始终更新** leaveTime，确保是最后一次离开时间 |
+| `LocationEvent` | 保留所有 ENTER/EXIT 原始事件流水，用于调试 |
+
+**首页状态判断**：
+- 无记录 / 无 arriveTime → 未到公司
+- status = PENDING → 优先显示"非工作日到达，等待确认"
+- 最新 LocationEvent 是 ENTER → 已到公司
+- 最新 LocationEvent 是 EXIT → 已离开公司
+
+## 总上班时长统计
+
+当 `arriveTime` 和 `leaveTime` 都存在时：
+- `总时长 = leaveTime - arriveTime`
+- 显示格式：小于 1 小时显示"xx 分钟"，大于等于 1 小时显示"x 小时 xx 分钟"
+- 如果还没有 `leaveTime`，显示"进行中"
 
 ## 技术栈
 
