@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
     <application
         android:allowBackup="true"
@@ -30,6 +32,11 @@
         <receiver
             android:name=".notification.AttendanceActionReceiver"
             android:exported="false" />
+
+        <service
+            android:name=".location.AttendanceLocationService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
 
         <activity
             android:name=".MainActivity"

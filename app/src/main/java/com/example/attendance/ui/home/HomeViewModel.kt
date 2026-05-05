@@ -1,20 +1,36 @@
 package com.example.attendance.ui.home
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.attendance.data.local.entities.AttendanceRecord
+import com.example.attendance.data.local.entities.LocationEvent
 import com.example.attendance.data.repository.AttendanceRepository
+import com.example.attendance.data.repository.TodayAttendanceState
+import com.example.attendance.data.settings.SettingsDataStore
+import com.example.attendance.data.settings.SettingsDataStore.AutoDetectState
 import com.example.attendance.data.settings.SettingsDataStore.CompanyLocation
 import com.example.attendance.domain.WorkdayChecker
+import com.example.attendance.location.AttendanceLocationService
 import com.example.attendance.util.DateTimeUtils
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class HomeViewModel(private val repository: AttendanceRepository) : ViewModel() {
+data class HomeScreenState(
+    val todayStateText: String = "未到公司",
+    val todayDuration: String = "",
+    val isWorkday: Boolean = true,
+    val record: com.example.attendance.data.local.entities.AttendanceRecord? = null,
+    val debugLatestEvent: LocationEvent? = null
+)
+
+class HomeViewModel(
+    private val repository: AttendanceRepository,
+    private val settingsDataStore: SettingsDataStore
+) : ViewModel() {
 
     val companyLocation: StateFlow<CompanyLocation> = repository.companyLocationFlow
         .stateIn(
@@ -23,49 +39,59 @@ class HomeViewModel(private val repository: AttendanceRepository) : ViewModel() 
             initialValue = CompanyLocation()
         )
 
-    private val _todayState = MutableStateFlow("未到公司")
-    val todayState: StateFlow<String> = _todayState
+    val autoDetectState: StateFlow<AutoDetectState> = settingsDataStore.autoDetectStateFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = AutoDetectState()
+        )
 
-    private val _todayRecord = MutableStateFlow<AttendanceRecord?>(null)
-    val todayRecord: StateFlow<AttendanceRecord?> = _todayRecord
+    val screenState: StateFlow<HomeScreenState> = combine(
+        repository.observeTodayAttendanceState(),
+        repository.observeTodayRecord(),
+        repository.observeTodayLatestEvent(),
+        repository.observeIsWorkday()
+    ) { state, record, event, isWorkday ->
+        val (stateText, duration) = when (state) {
+            TodayAttendanceState.NOT_ARRIVED -> "未到公司" to ""
+            TodayAttendanceState.PENDING -> "非工作日到达，等待确认" to "进行中"
+            TodayAttendanceState.INSIDE -> {
+                if (record?.leaveTime != null) "已到公司" to "进行中"
+                else "已到公司" to "进行中"
+            }
+            TodayAttendanceState.LEFT -> {
+                val dur = if (record?.arriveTime != null && record?.leaveTime != null)
+                    DateTimeUtils.formatDuration(record.arriveTime, record.leaveTime) else ""
+                "已离开公司" to dur
+            }
+        }
+        Log.d("HomeScreenState", "todayAttendanceState=$state, stateText=$stateText")
+        HomeScreenState(
+            todayStateText = stateText,
+            todayDuration = duration,
+            isWorkday = isWorkday,
+            record = record,
+            debugLatestEvent = event
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = HomeScreenState()
+    )
 
-    private val _isWorkday = MutableStateFlow(true)
-    val isWorkday: StateFlow<Boolean> = _isWorkday
-
-    private val _todayDuration = MutableStateFlow("")
-    val todayDuration: StateFlow<String> = _todayDuration
-
-    init {
-        refreshToday()
+    fun onStartAutoDetect(context: android.content.Context) {
+        viewModelScope.launch {
+            settingsDataStore.setAutoDetectEnabled(true)
+            Log.d("AutoDetectSwitch", "enabled=true, serviceStartRequested=true")
+            AttendanceLocationService.start(context)
+        }
     }
 
-    fun refreshToday() {
+    fun onStopAutoDetect(context: android.content.Context) {
         viewModelScope.launch {
-            val today = DateTimeUtils.getTodayDate()
-            val record = repository.getTodayRecord(today)
-            val latestEvent = repository.getTodayLatestEvent()
-            _todayRecord.value = record
-            _isWorkday.value = WorkdayChecker().isWorkday(today)
-
-            when {
-                record == null || record.arriveTime == null -> {
-                    _todayState.value = "未到公司"
-                    _todayDuration.value = ""
-                }
-                record.status == "PENDING" -> {
-                    _todayState.value = "非工作日到达，等待确认"
-                    _todayDuration.value = "进行中"
-                }
-                record.leaveTime != null -> {
-                    val isCurrentlyIn = latestEvent?.type == "ENTER"
-                    _todayState.value = if (isCurrentlyIn) "已到公司" else "已离开公司"
-                    _todayDuration.value = if (isCurrentlyIn) "进行中" else DateTimeUtils.formatDuration(record.arriveTime, record.leaveTime)
-                }
-                else -> {
-                    _todayState.value = "已到公司"
-                    _todayDuration.value = "进行中"
-                }
-            }
+            settingsDataStore.setAutoDetectEnabled(false)
+            Log.d("AutoDetectSwitch", "enabled=false, serviceStopRequested=true")
+            AttendanceLocationService.stop(context)
         }
     }
 
@@ -86,14 +112,12 @@ class HomeViewModel(private val repository: AttendanceRepository) : ViewModel() 
     fun simulateArrive() {
         viewModelScope.launch {
             repository.simulateArrive(DateTimeUtils.getTodayDate())
-            refreshToday()
         }
     }
 
     fun simulateLeave() {
         viewModelScope.launch {
             repository.simulateLeave(DateTimeUtils.getTodayDate())
-            refreshToday()
         }
     }
 }

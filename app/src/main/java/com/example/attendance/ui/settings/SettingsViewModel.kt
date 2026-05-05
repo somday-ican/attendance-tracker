@@ -6,7 +6,6 @@ import com.example.attendance.data.settings.SettingsDataStore
 import com.example.attendance.data.settings.SettingsDataStore.CompanyLocation
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -18,19 +17,20 @@ class SettingsViewModel(private val settingsDataStore: SettingsDataStore) : View
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = CompanyLocation()
         )
-    
+
     fun saveCompanyLocation(
         latitude: String?,
         longitude: String?,
         address: String?,
         geofenceRadiusMeters: String,
-        enableWeekendReminder: Boolean
+        enableWeekendReminder: Boolean,
+        onSaved: () -> Unit
     ) {
         viewModelScope.launch {
             val lat = latitude?.toDoubleOrNull()
             val lng = longitude?.toDoubleOrNull()
             val radius = geofenceRadiusMeters.toFloatOrNull() ?: 150f
-            
+
             settingsDataStore.saveCompanyLocation(
                 latitude = lat,
                 longitude = lng,
@@ -38,9 +38,10 @@ class SettingsViewModel(private val settingsDataStore: SettingsDataStore) : View
                 geofenceRadiusMeters = radius,
                 enableWeekendReminder = enableWeekendReminder
             )
+            onSaved()
         }
     }
-    
+
     fun clearCompanyLocation() {
         viewModelScope.launch {
             settingsDataStore.clearCompanyLocation()

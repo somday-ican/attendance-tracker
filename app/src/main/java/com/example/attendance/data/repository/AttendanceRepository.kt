@@ -9,6 +9,16 @@ import com.example.attendance.domain.AttendanceRules
 import com.example.attendance.domain.WorkdayChecker
 import com.example.attendance.util.DateTimeUtils
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+
+enum class TodayAttendanceState {
+    NOT_ARRIVED,
+    INSIDE,
+    LEFT,
+    PENDING
+}
 
 class AttendanceRepository(
     val attendanceDao: AttendanceDao,
@@ -27,6 +37,52 @@ class AttendanceRepository(
 
     suspend fun getTodayLatestEvent(): LocationEvent? {
         return attendanceDao.getLatestEventOnDate(DateTimeUtils.getTodayStartMillis(), DateTimeUtils.getTodayEndMillis())
+    }
+
+    suspend fun getTodayAttendanceStateOnce(): TodayAttendanceState {
+        val today = DateTimeUtils.getTodayDate()
+        val record = getTodayRecord(today)
+        return deriveState(record, getTodayLatestEvent())
+    }
+
+    fun observeTodayAttendanceState(): Flow<TodayAttendanceState> {
+        val today = DateTimeUtils.getTodayDate()
+        val start = DateTimeUtils.getTodayStartMillis()
+        val end = DateTimeUtils.getTodayEndMillis()
+        return combine(
+            attendanceDao.observeRecordByDate(today),
+            attendanceDao.observeLatestEventOnDate(start, end)
+        ) { record, latestEvent ->
+            deriveState(record, latestEvent)
+        }.distinctUntilChanged()
+    }
+
+    fun observeTodayRecord(): Flow<AttendanceRecord?> {
+        return attendanceDao.observeRecordByDate(DateTimeUtils.getTodayDate())
+    }
+
+    fun observeTodayLatestEvent(): Flow<LocationEvent?> {
+        return attendanceDao.observeLatestEventOnDate(
+            DateTimeUtils.getTodayStartMillis(), DateTimeUtils.getTodayEndMillis()
+        )
+    }
+
+    fun observeIsWorkday(): Flow<Boolean> {
+        return observeTodayRecord().map { record ->
+            record?.let { workdayChecker.isWorkday(it.date) } ?: workdayChecker.isWorkday(DateTimeUtils.getTodayDate())
+        }.distinctUntilChanged()
+    }
+
+    private fun deriveState(record: AttendanceRecord?, latestEvent: LocationEvent?): TodayAttendanceState {
+        if (record == null || record.arriveTime == null) return TodayAttendanceState.NOT_ARRIVED
+        if (record.status == "PENDING") return TodayAttendanceState.PENDING
+        return when (latestEvent?.type) {
+            "ENTER" -> TodayAttendanceState.INSIDE
+            "EXIT" -> TodayAttendanceState.LEFT
+            else -> {
+                if (record.leaveTime == null) TodayAttendanceState.INSIDE else TodayAttendanceState.LEFT
+            }
+        }
     }
 
     suspend fun handleEnter(source: String) {
